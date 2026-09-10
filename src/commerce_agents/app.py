@@ -22,6 +22,10 @@ from .reference.adapter import (
     TelecomBackendAdapter,
     TravelBackendAdapter,
 )
+from .reference.entertainment import MockTicketing
+from .reference.retail import MockRetail
+from .reference.telecom import MockTelecom
+from .reference.travel import MockTravel
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
 
@@ -43,7 +47,17 @@ class RetailHost:
     def __init__(self, model: str) -> None:
         self._agents = {
             role: build_retail_agent(role, model)
-            for role in ("shopping", "merchant", "travel", "telecom", "entertainment")
+            for role in (
+                "shopping",
+                "merchant",
+                "retail_merchant",
+                "travel",
+                "telecom",
+                "entertainment",
+                "travel_merchant",
+                "telecom_merchant",
+                "entertainment_merchant",
+            )
         }
         self._sessions: dict[tuple[Role, str], Session] = {}
 
@@ -66,10 +80,18 @@ class RetailHost:
             session.shopping_executor = ShoppingExecutor(
                 EntertainmentBackendAdapter(session_id), session_id
             )
-        else:
+        elif role == "merchant":
             from .retail import CATALOG
 
             session.merchant_executor = MerchantExecutor(list(CATALOG))
+        elif role == "retail_merchant":
+            session.merchant_executor = MerchantExecutor(backend=MockRetail())
+        elif role == "travel_merchant":
+            session.merchant_executor = MerchantExecutor(backend=MockTravel())
+        elif role == "telecom_merchant":
+            session.merchant_executor = MerchantExecutor(backend=MockTelecom())
+        else:
+            session.merchant_executor = MerchantExecutor(backend=MockTicketing())
         self._sessions[(role, session_id)] = session
         return session_id
 
@@ -112,8 +134,8 @@ class RetailHost:
         ):
             yield event
 
-    def approve_change(self, session_id: str, change_id: str) -> dict:
-        session = self._sessions.get(("merchant", session_id))
+    def approve_change(self, role: Role, session_id: str, change_id: str) -> dict:
+        session = self._sessions.get((role, session_id))
         if session is None or session.merchant_executor is None:
             raise KeyError(session_id)
         return session.merchant_executor.approve(change_id).model_dump(mode="json")
@@ -157,6 +179,10 @@ def create_app(model: str | None = None) -> FastAPI:
     routes("telecom", "/api/telecom")
     routes("entertainment", "/api/entertainment")
     routes("merchant", "/api/merchant")
+    routes("retail_merchant", "/api/retail/merchant")
+    routes("travel_merchant", "/api/travel/merchant")
+    routes("telecom_merchant", "/api/telecom/merchant")
+    routes("entertainment_merchant", "/api/entertainment/merchant")
 
     @app.post("/api/merchant/changes/{change_id}/approve")
     async def approve_change(
@@ -165,11 +191,30 @@ def create_app(model: str | None = None) -> FastAPI:
         if not x_session_id:
             raise HTTPException(status_code=401, detail="X-Session-Id is required")
         try:
-            return {"change": host.approve_change(x_session_id, change_id)}
+            return {"change": host.approve_change("merchant", x_session_id, change_id)}
         except KeyError as error:
             raise HTTPException(status_code=404, detail="Unknown session") from error
         except ChangeNotApplicable as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+
+    def approval_route(role: Role, prefix: str) -> None:
+        @app.post(f"{prefix}/changes/{{change_id}}/approve")
+        async def approve_vertical_change(
+            change_id: str, x_session_id: str | None = Header(default=None)
+        ) -> dict:
+            if not x_session_id:
+                raise HTTPException(status_code=401, detail="X-Session-Id is required")
+            try:
+                return {"change": host.approve_change(role, x_session_id, change_id)}
+            except KeyError as error:
+                raise HTTPException(status_code=404, detail="Unknown session") from error
+            except ChangeNotApplicable as error:
+                raise HTTPException(status_code=409, detail=str(error)) from error
+
+    approval_route("retail_merchant", "/api/retail/merchant")
+    approval_route("travel_merchant", "/api/travel/merchant")
+    approval_route("telecom_merchant", "/api/telecom/merchant")
+    approval_route("entertainment_merchant", "/api/entertainment/merchant")
 
     return app
 

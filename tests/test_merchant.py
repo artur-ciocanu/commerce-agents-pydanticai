@@ -1,7 +1,13 @@
+import json
+from typing import Any
+
 from fastapi.testclient import TestClient
 
 from commerce_agents.app import create_app
 from commerce_agents.merchant import MerchantExecutor
+from commerce_agents.reference.entertainment import MockTicketing
+from commerce_agents.reference.telecom import MockTelecom
+from commerce_agents.reference.travel import MockTravel
 from commerce_agents.retail import CATALOG
 
 
@@ -52,3 +58,50 @@ async def test_host_approval_endpoint_is_the_only_approval_path() -> None:
     assert response.status_code == 200
     assert response.json()["change"]["status"] == "staged"
     assert applied.events[0].data["change"]["status"] == "applied"
+
+
+def _payload(result: str) -> Any:
+    return json.loads(result.split("\n", 1)[1].rsplit("\n", 1)[0])
+
+
+async def test_source_style_price_change_requires_listing_provenance() -> None:
+    executor = MerchantExecutor(backend=MockTelecom())
+    blocked = await executor.execute(
+        "stage_price_update", {"items": [{"listing_id": "AM-PLAN-101", "new_price": 35}]}
+    )
+    await executor.execute("get_listing", {"listing_id": "AM-PLAN-101"})
+    staged = await executor.execute(
+        "stage_price_update", {"items": [{"listing_id": "AM-PLAN-101", "new_price": 35}]}
+    )
+
+    assert blocked.is_error
+    assert staged.events[0].data["change"]["kind"] == "price_update"
+
+
+async def test_vertical_merchants_stage_domain_inventory_changes() -> None:
+    for backend in (MockTravel(), MockTicketing()):
+        executor = MerchantExecutor(backend=backend)
+        listings = await executor.execute("search_listings", {"query": "", "limit": 1})
+        listing_id = _payload(listings.result_text)[0]["listing_id"]
+        staged = await executor.execute(
+            "stage_inventory_action",
+            {"items": [{"listing_id": listing_id, "action": "restock", "quantity": 1}]},
+        )
+
+        assert staged.events[0].data["change"]["kind"] == "inventory_action"
+
+
+def test_vertical_merchant_routes_create_isolated_sessions() -> None:
+    app = create_app("test")
+    with TestClient(app) as client:
+        sessions = [
+            client.post(route).json()["session_id"]
+            for route in (
+                "/api/retail/merchant/session",
+                "/api/travel/merchant/session",
+                "/api/telecom/merchant/session",
+                "/api/entertainment/merchant/session",
+            )
+        ]
+
+    assert len(set(sessions)) == 4

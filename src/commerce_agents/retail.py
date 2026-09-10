@@ -18,7 +18,17 @@ from .shopping import (
     shopping_tools,
 )
 
-Role = Literal["shopping", "merchant", "travel", "telecom", "entertainment"]
+Role = Literal[
+    "shopping",
+    "merchant",
+    "retail_merchant",
+    "travel",
+    "telecom",
+    "entertainment",
+    "travel_merchant",
+    "telecom_merchant",
+    "entertainment_merchant",
+]
 
 MEMORY_TOOL = ToolContract(
     "save_memory",
@@ -191,11 +201,20 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
             ),
             tools=(*shopping_tools(), MEMORY_TOOL),
         )
+    merchant_role = {
+        "merchant": "retail",
+        "retail_merchant": "retail",
+        "travel_merchant": "travel",
+        "telecom_merchant": "telecom",
+        "entertainment_merchant": "ticketing",
+    }[role]
     return CommerceAgent(
         model=model,
         instructions=(
-            "You are a retail merchant assistant. Use tools for operational facts. Every write "
-            "must be staged for a human host; never claim a staged change is applied."
+            f"You are a {merchant_role} merchant assistant. Use tools for operational facts. "
+            "Every write must be staged for a human host; never claim a staged change is applied. "
+            "Read listings and pricing context before staging a change, and only apply a change "
+            "after the host marks that exact change approved."
         ),
         tools=(*merchant_tools(), MEMORY_TOOL),
         analysis=MerchantAnalysis(model),

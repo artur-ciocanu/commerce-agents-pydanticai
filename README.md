@@ -7,6 +7,9 @@ The runtime accepts a normal PydanticAI model specification, such as
 Commerce tool contracts remain JSON Schema documents and every tool call is delegated to the
 application-owned executor. The model never receives direct backend access.
 
+Every contract is validated again at execution time. Invalid model arguments trigger a PydanticAI
+retry rather than reaching the backend; bounded request and tool-call budgets prevent runaway turns.
+
 ## Status
 
 This repository is the in-progress PydanticAI port of Anthropic's commerce-agents reference.

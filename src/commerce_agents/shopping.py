@@ -209,6 +209,28 @@ def shopping_tools(skills: SkillRegistry | None = None) -> tuple[ToolContract, .
             ),
         ),
         ToolContract(
+            "present_product_cards",
+            "Render grounded retail product cards.",
+            _schema(
+                {
+                    "title": {"type": "string"},
+                    "product_ids": {"type": "array", "items": {"type": "string"}},
+                },
+                ["title", "product_ids"],
+            ),
+        ),
+        ToolContract(
+            "present_comparison",
+            "Render a grounded retail product comparison.",
+            _schema(
+                {
+                    "title": {"type": "string"},
+                    "product_ids": {"type": "array", "items": {"type": "string"}},
+                },
+                ["title", "product_ids"],
+            ),
+        ),
+        ToolContract(
             "checkout", "Hand off the current cart to the host checkout flow.", _schema({})
         ),
     )
@@ -312,6 +334,15 @@ class ShoppingExecutor:
 
             event = hold_view(arguments, self.state.seen_products)
             return ToolOutcome("Displayed ticket hold view.", (event,))
+        if name in {"present_product_cards", "present_comparison"}:
+            from .retail_presentation import comparison, product_cards
+
+            event = (
+                product_cards(arguments, self.state.seen_products)
+                if name == "present_product_cards"
+                else comparison(arguments, self.state.seen_products)
+            )
+            return ToolOutcome("Displayed retail presentation.", (event,))
         return ToolOutcome(f"Unsupported shopping tool: {name}", is_error=True)
 
     async def _cart_change(self, name: str, product_id: str, arguments: dict[str, Any]) -> Cart:

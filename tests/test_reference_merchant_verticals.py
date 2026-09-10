@@ -1,4 +1,6 @@
+from commerce_agents.reference.entertainment import MockTicketing
 from commerce_agents.reference.merchant_agent import MerchantSessionContext
+from commerce_agents.reference.merchant_entertainment import MockTicketingMerchant
 from commerce_agents.reference.merchant_telecom import MockTelecomMerchant
 from commerce_agents.reference.merchant_travel import MockTravelMerchant
 from commerce_agents.reference.telecom import MockTelecom
@@ -19,3 +21,14 @@ async def test_vendored_travel_and_telecom_merchants_read_vertical_context() -> 
     assert telecom_snapshot.orders > 0
     assert travel_context is not None and travel_context["supplier"] == travel.supplier_name
     assert telecom_context is not None and telecom_context["carrier"] == telecom.carrier_name
+
+
+async def test_vendored_ticketing_merchant_reads_live_pacing() -> None:
+    session = MerchantSessionContext(session_id="s", merchant_id="m", operator="operator-1")
+    merchant = MockTicketingMerchant(MockTicketing())
+
+    alerts = await merchant.get_inventory_alerts(session)
+    context = await merchant.get_merchant_context(session)
+
+    assert context is not None and context["promoter"] == merchant.promoter_name
+    assert isinstance(alerts, list)

@@ -178,6 +178,37 @@ def shopping_tools(skills: SkillRegistry | None = None) -> tuple[ToolContract, .
             _schema({"product_id": {"type": "string"}}, ["product_id"]),
         ),
         ToolContract(
+            "present_itinerary",
+            "Render a grounded travel itinerary.",
+            _schema(
+                {
+                    "title": {"type": "string"},
+                    "days": {"type": "array"},
+                    "travel_dates": {"type": "string"},
+                },
+                ["title", "days"],
+            ),
+        ),
+        ToolContract(
+            "present_plan_matrix",
+            "Render a grounded telecom plan comparison.",
+            _schema(
+                {
+                    "title": {"type": "string"},
+                    "product_ids": {"type": "array", "items": {"type": "string"}},
+                    "highlight_product_id": {"type": "string"},
+                },
+                ["title", "product_ids"],
+            ),
+        ),
+        ToolContract(
+            "present_hold_view",
+            "Render grounded ticket hold details.",
+            _schema(
+                {"product_ids": {"type": "array", "items": {"type": "string"}}}, ["product_ids"]
+            ),
+        ),
+        ToolContract(
             "checkout", "Hand off the current cart to the host checkout flow.", _schema({})
         ),
     )
@@ -262,6 +293,25 @@ class ShoppingExecutor:
                 ),
                 (AgentEvent("ui", {"component": "checkout_handoff"}),),
             )
+        if name == "present_itinerary":
+            from .travel_presentation import itinerary_partial
+
+            event = itinerary_partial(arguments, self.state.seen_products)
+            return ToolOutcome(
+                "Displayed itinerary.", (event,) if event else (), is_error=event is None
+            )
+        if name == "present_plan_matrix":
+            from .telecom_presentation import plan_matrix_partial
+
+            event = plan_matrix_partial(arguments, self.state.seen_products)
+            return ToolOutcome(
+                "Displayed plan matrix.", (event,) if event else (), is_error=event is None
+            )
+        if name == "present_hold_view":
+            from .entertainment_presentation import hold_view
+
+            event = hold_view(arguments, self.state.seen_products)
+            return ToolOutcome("Displayed ticket hold view.", (event,))
         return ToolOutcome(f"Unsupported shopping tool: {name}", is_error=True)
 
     async def _cart_change(self, name: str, product_id: str, arguments: dict[str, Any]) -> Cart:

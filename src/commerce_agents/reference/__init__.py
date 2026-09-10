@@ -1,9 +1,11 @@
 """Transplanted commerce-agents domain contracts, independent of model runtimes."""
 
-from .adapter import RetailBackendAdapter, TravelBackendAdapter
+from .adapter import RetailBackendAdapter, TelecomBackendAdapter, TravelBackendAdapter
 from .shopping import (
     Cart,
     CartItem,
+    Disclosure,
+    DisclosureRow,
     FulfillmentOption,
     Order,
     OrderItem,
@@ -20,6 +22,8 @@ from .shopping import (
 __all__ = [
     "Cart",
     "CartItem",
+    "Disclosure",
+    "DisclosureRow",
     "FulfillmentOption",
     "Order",
     "OrderItem",
@@ -30,6 +34,7 @@ __all__ = [
     "RetailBackendAdapter",
     "SearchFilters",
     "ShoppingSessionContext",
+    "TelecomBackendAdapter",
     "TravelBackendAdapter",
     "Unavailable",
     "UserPreferences",

@@ -128,6 +128,20 @@ class Policy(BaseModel):
     content: str
 
 
+class DisclosureRow(BaseModel):
+    label: str
+    value: str
+    note: str | None = None
+
+
+class Disclosure(BaseModel):
+    title: str
+    product_id: str
+    rows: list[DisclosureRow]
+    sources: list[str] = Field(default_factory=list)
+    footnotes: list[str] = Field(default_factory=list)
+
+
 class FulfillmentOption(BaseModel):
     method: Literal["delivery", "pickup", "shipping"]
     eta: str

@@ -18,7 +18,7 @@ from .shopping import (
     shopping_tools,
 )
 
-Role = Literal["shopping", "merchant", "travel"]
+Role = Literal["shopping", "merchant", "travel", "telecom"]
 
 MEMORY_TOOL = ToolContract(
     "save_memory",
@@ -170,6 +170,15 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
                 "You are a concise travel assistant. Use tools for live travel options and prices. "
                 "Never invent availability, dates, cancellation terms, or bookings. Explain that "
                 "prices and availability are confirmed at booking."
+            ),
+            tools=(*shopping_tools(), MEMORY_TOOL),
+        )
+    if role == "telecom":
+        return CommerceAgent(
+            model=model,
+            instructions=(
+                "You are a concise telecom assistant. Use tools for plans, devices, prices, and "
+                "policies. Never invent eligibility, contract terms, trade-in values, or disclosures."
             ),
             tools=(*shopping_tools(), MEMORY_TOOL),
         )

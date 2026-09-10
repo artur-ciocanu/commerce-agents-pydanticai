@@ -7,6 +7,7 @@ from typing import Any
 from ..shopping import Cart, CartItem, FulfillmentOption, Policy, Product, ProductDetails
 from .retail import MockRetail
 from .shopping import SearchFilters, ShoppingSessionContext
+from .telecom import MockTelecom
 from .travel import MockTravel
 
 
@@ -65,3 +66,10 @@ class TravelBackendAdapter(RetailBackendAdapter):
 
     def __init__(self, session_id: str, backend: MockTravel | None = None) -> None:
         super().__init__(session_id, backend or MockTravel())
+
+
+class TelecomBackendAdapter(RetailBackendAdapter):
+    """The source MockTelecom API behind the target's provider-neutral tool executor."""
+
+    def __init__(self, session_id: str, backend: MockTelecom | None = None) -> None:
+        super().__init__(session_id, backend or MockTelecom())

@@ -1,0 +1,21 @@
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local environments and build output
+.venv/
+venv/
+*.egg-info/
+
+# Local credentials and editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/

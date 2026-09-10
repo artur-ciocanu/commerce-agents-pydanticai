@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..shopping import Cart, CartItem, FulfillmentOption, Policy, Product, ProductDetails
+from .entertainment import MockTicketing
 from .retail import MockRetail
 from .shopping import SearchFilters, ShoppingSessionContext
 from .telecom import MockTelecom
@@ -73,3 +74,10 @@ class TelecomBackendAdapter(RetailBackendAdapter):
 
     def __init__(self, session_id: str, backend: MockTelecom | None = None) -> None:
         super().__init__(session_id, backend or MockTelecom())
+
+
+class EntertainmentBackendAdapter(RetailBackendAdapter):
+    """The source ticketing backend, including its live availability and hold state."""
+
+    def __init__(self, session_id: str, backend: MockTicketing | None = None) -> None:
+        super().__init__(session_id, backend or MockTicketing())

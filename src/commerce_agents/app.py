@@ -16,7 +16,12 @@ from pydantic_ai.messages import ModelMessage
 from .events import AgentEvent
 from .memory import SessionMemory
 from .merchant import ChangeNotApplicable, MerchantExecutor
-from .reference.adapter import RetailBackendAdapter, TelecomBackendAdapter, TravelBackendAdapter
+from .reference.adapter import (
+    EntertainmentBackendAdapter,
+    RetailBackendAdapter,
+    TelecomBackendAdapter,
+    TravelBackendAdapter,
+)
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
 
@@ -38,7 +43,7 @@ class RetailHost:
     def __init__(self, model: str) -> None:
         self._agents = {
             role: build_retail_agent(role, model)
-            for role in ("shopping", "merchant", "travel", "telecom")
+            for role in ("shopping", "merchant", "travel", "telecom", "entertainment")
         }
         self._sessions: dict[tuple[Role, str], Session] = {}
 
@@ -57,6 +62,10 @@ class RetailHost:
             session.shopping_executor = ShoppingExecutor(
                 TelecomBackendAdapter(session_id), session_id
             )
+        elif role == "entertainment":
+            session.shopping_executor = ShoppingExecutor(
+                EntertainmentBackendAdapter(session_id), session_id
+            )
         else:
             from .retail import CATALOG
 
@@ -70,7 +79,7 @@ class RetailHost:
             raise KeyError(session_id)
         executor = (
             session.shopping_executor
-            if role in {"shopping", "travel", "telecom"}
+            if role in {"shopping", "travel", "telecom", "entertainment"}
             else session.merchant_executor
         )
         assert executor is not None
@@ -91,7 +100,7 @@ class RetailHost:
         session = self.session(role, session_id)
         executor = (
             session.shopping_executor
-            if role in {"shopping", "travel", "telecom"}
+            if role in {"shopping", "travel", "telecom", "entertainment"}
             else session.merchant_executor
         )
         assert executor is not None
@@ -146,6 +155,7 @@ def create_app(model: str | None = None) -> FastAPI:
     routes("shopping", "/api")
     routes("travel", "/api/travel")
     routes("telecom", "/api/telecom")
+    routes("entertainment", "/api/entertainment")
     routes("merchant", "/api/merchant")
 
     @app.post("/api/merchant/changes/{change_id}/approve")

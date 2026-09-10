@@ -2,6 +2,16 @@
 
 Provider-agnostic shopping and merchant agent runtime built on PydanticAI v2.
 
+## Live Provider Smoke Test
+
+The deterministic suite does not require provider credentials. To exercise a configured
+provider's streaming, tool selection, session history, and SSE relay, set `COMMERCE_MODEL`
+and the matching provider credentials, then run:
+
+```bash
+mise exec -- uv run pytest -m live tests/test_live_provider_smoke.py
+```
+
 The runtime accepts a normal PydanticAI model specification, such as
 `openai:gpt-5.2`, `anthropic:claude-sonnet-4-5`, or `google-gla:gemini-3-flash-preview`.
 Commerce tool contracts remain JSON Schema documents and every tool call is delegated to the

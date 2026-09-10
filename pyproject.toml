@@ -32,6 +32,7 @@ packages = ["src/commerce_agents"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["live: requires a configured COMMERCE_MODEL provider"]
 
 [tool.ruff]
 line-length = 100

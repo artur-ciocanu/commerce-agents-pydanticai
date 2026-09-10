@@ -50,6 +50,14 @@ class RetailBackendAdapter:
         policies = await self._backend.search_policies(self._session, query)
         return [Policy.model_validate(policy.model_dump()) for policy in policies]
 
+    async def get_orders(self, limit: int = 5) -> list[dict[str, Any]]:
+        orders = await self._backend.get_orders(self._session, limit)
+        return [order.model_dump(mode="json") for order in orders]
+
+    async def get_order(self, order_id: str) -> dict[str, Any] | None:
+        order = await self._backend.get_order(self._session, order_id)
+        return order.model_dump(mode="json") if order else None
+
     async def get_fulfillment_options(self, product_ids: list[str]) -> list[FulfillmentOption]:
         options = await self._backend.get_fulfillment_options(self._session, product_ids)
         return [FulfillmentOption.model_validate(option.model_dump()) for option in options]

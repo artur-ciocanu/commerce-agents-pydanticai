@@ -24,6 +24,13 @@ class Product(BaseModel):
     in_stock: bool = True
     short_description: str | None = None
     attributes: dict[str, str] = Field(default_factory=dict)
+    options: dict[str, list[str]] = Field(default_factory=dict)
+    option_values: dict[str, str] = Field(default_factory=dict)
+    variant_of: str | None = None
+
+    @property
+    def has_options(self) -> bool:
+        return bool(self.options)
 
 
 class ProductDetails(Product):
@@ -140,6 +147,16 @@ def shopping_tools(skills: SkillRegistry | None = None) -> tuple[ToolContract, .
             _schema({"query": {"type": "string"}}, ["query"]),
         ),
         ToolContract(
+            "get_orders",
+            "Read recent orders for the active customer.",
+            _schema({"limit": {"type": "integer", "minimum": 1, "maximum": 5}}),
+        ),
+        ToolContract(
+            "get_order_status",
+            "Read the status of one order belonging to the active customer.",
+            _schema({"order_id": {"type": "string"}}, ["order_id"]),
+        ),
+        ToolContract(
             "get_fulfillment_options",
             "Read delivery or pickup options for products.",
             _schema(
@@ -175,10 +192,16 @@ class ShoppingExecutor:
             return self._fenced(product.model_dump())
         if name in {"add_to_cart", "update_cart_item", "remove_from_cart"}:
             product_id = str(arguments["product_id"])
-            if product_id not in self.state.seen_products:
+            product = self.state.seen_products.get(product_id)
+            if product is None:
                 return ToolOutcome(
                     "Read this product from the catalog before changing the cart.",
                     blocked="provenance",
+                )
+            if name == "add_to_cart" and product.has_options:
+                return ToolOutcome(
+                    "Read this product's details and add a specific in-stock variant.",
+                    blocked="variant_selection",
                 )
             cart = await self._cart_change(name, product_id, arguments)
             return self._cart_outcome(cart)
@@ -187,6 +210,17 @@ class ShoppingExecutor:
         if name == "search_policies":
             policies = await self.backend.search_policies(arguments["query"])
             return self._fenced([policy.model_dump() for policy in policies])
+        if name == "get_orders":
+            get_orders = getattr(self.backend, "get_orders", None)
+            if get_orders is None:
+                return ToolOutcome("Orders are not available for this storefront.", is_error=True)
+            return self._fenced(await get_orders(int(arguments.get("limit", 5))))
+        if name == "get_order_status":
+            get_order = getattr(self.backend, "get_order", None)
+            if get_order is None:
+                return ToolOutcome("Orders are not available for this storefront.", is_error=True)
+            order = await get_order(arguments["order_id"])
+            return self._fenced(order) if order else ToolOutcome("Order not found.", is_error=True)
         if name == "get_fulfillment_options":
             options = await self.backend.get_fulfillment_options(list(arguments["product_ids"]))
             return self._fenced([option.model_dump() for option in options])

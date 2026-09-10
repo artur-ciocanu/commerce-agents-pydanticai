@@ -58,6 +58,18 @@ class RetailBackendAdapter:
         order = await self._backend.get_order(self._session, order_id)
         return order.model_dump(mode="json") if order else None
 
+    async def get_preferences(self) -> dict[str, Any]:
+        return (await self._backend.get_preferences(self._session)).model_dump(mode="json")
+
+    async def get_account_context(self) -> dict[str, Any] | None:
+        method = getattr(self._backend, "get_account_context", None)
+        return await method(self._session) if method else None
+
+    async def get_disclosure(self, product_id: str) -> dict[str, Any] | None:
+        method = getattr(self._backend, "get_disclosure", None)
+        disclosure = await method(self._session, product_id) if method else None
+        return disclosure.model_dump(mode="json") if disclosure else None
+
     async def get_fulfillment_options(self, product_ids: list[str]) -> list[FulfillmentOption]:
         options = await self._backend.get_fulfillment_options(self._session, product_ids)
         return [FulfillmentOption.model_validate(option.model_dump()) for option in options]

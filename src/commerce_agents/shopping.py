@@ -115,6 +115,14 @@ def shopping_tools(skills: SkillRegistry | None = None) -> tuple[ToolContract, .
         ),
         ToolContract("get_cart", "Read the active cart.", _schema({})),
         ToolContract(
+            "get_preferences", "Read saved customer preferences and constraints.", _schema({})
+        ),
+        ToolContract(
+            "get_account_context",
+            "Read the active customer account context when offered.",
+            _schema({}),
+        ),
+        ToolContract(
             "add_to_cart",
             "Add a previously seen, in-stock product to the cart.",
             _schema(
@@ -164,6 +172,14 @@ def shopping_tools(skills: SkillRegistry | None = None) -> tuple[ToolContract, .
                 ["product_ids"],
             ),
         ),
+        ToolContract(
+            "get_disclosure",
+            "Read required product pricing and service disclosures.",
+            _schema({"product_id": {"type": "string"}}, ["product_id"]),
+        ),
+        ToolContract(
+            "checkout", "Hand off the current cart to the host checkout flow.", _schema({})
+        ),
     )
 
 
@@ -207,6 +223,18 @@ class ShoppingExecutor:
             return self._cart_outcome(cart)
         if name == "get_cart":
             return self._cart_outcome(await self.backend.get_cart(self.session_id), emit=False)
+        if name in {"get_preferences", "get_account_context", "get_disclosure"}:
+            method = getattr(self.backend, name, None)
+            if method is None:
+                return ToolOutcome(f"{name} is not available for this storefront.", is_error=True)
+            value = (
+                await method(arguments["product_id"])
+                if name == "get_disclosure"
+                else await method()
+            )
+            return self._fenced(
+                value.model_dump(mode="json") if hasattr(value, "model_dump") else value
+            )
         if name == "search_policies":
             policies = await self.backend.search_policies(arguments["query"])
             return self._fenced([policy.model_dump() for policy in policies])
@@ -224,6 +252,16 @@ class ShoppingExecutor:
         if name == "get_fulfillment_options":
             options = await self.backend.get_fulfillment_options(list(arguments["product_ids"]))
             return self._fenced([option.model_dump() for option in options])
+        if name == "checkout":
+            cart = await self.backend.get_cart(self.session_id)
+            if not cart.items:
+                return ToolOutcome("The cart is empty.", is_error=True)
+            return ToolOutcome(
+                SHOPPING_FENCE.fence_payload(
+                    {"checkout_handoff": True, "items": [item.model_dump() for item in cart.items]}
+                ),
+                (AgentEvent("ui", {"component": "checkout_handoff"}),),
+            )
         return ToolOutcome(f"Unsupported shopping tool: {name}", is_error=True)
 
     async def _cart_change(self, name: str, product_id: str, arguments: dict[str, Any]) -> Cart:

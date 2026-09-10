@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .analysis import MerchantAnalysis
 from .merchant import merchant_tools
 from .runtime import CommerceAgent, ToolContract
 from .shopping import (
@@ -17,7 +18,7 @@ from .shopping import (
     shopping_tools,
 )
 
-Role = Literal["shopping", "merchant"]
+Role = Literal["shopping", "merchant", "travel"]
 
 MEMORY_TOOL = ToolContract(
     "save_memory",
@@ -162,6 +163,16 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
             ),
             tools=(*shopping_tools(), MEMORY_TOOL),
         )
+    if role == "travel":
+        return CommerceAgent(
+            model=model,
+            instructions=(
+                "You are a concise travel assistant. Use tools for live travel options and prices. "
+                "Never invent availability, dates, cancellation terms, or bookings. Explain that "
+                "prices and availability are confirmed at booking."
+            ),
+            tools=(*shopping_tools(), MEMORY_TOOL),
+        )
     return CommerceAgent(
         model=model,
         instructions=(
@@ -169,4 +180,5 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
             "must be staged for a human host; never claim a staged change is applied."
         ),
         tools=(*merchant_tools(), MEMORY_TOOL),
+        analysis=MerchantAnalysis(model),
     )

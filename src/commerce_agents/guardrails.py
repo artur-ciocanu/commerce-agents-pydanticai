@@ -23,6 +23,28 @@ def redact_sensitive_text(text: str) -> str:
     return _SENSITIVE.sub("[redacted]", text)
 
 
+class StreamingRedactor:
+    """Delay a small suffix so patterns split across model chunks cannot leak."""
+
+    def __init__(self, suffix_chars: int = 256) -> None:
+        self._suffix_chars = suffix_chars
+        self._buffer = ""
+
+    def feed(self, text: str) -> str:
+        self._buffer += text
+        if len(self._buffer) <= self._suffix_chars:
+            return ""
+        safe, self._buffer = (
+            self._buffer[: -self._suffix_chars],
+            self._buffer[-self._suffix_chars :],
+        )
+        return redact_sensitive_text(safe)
+
+    def finish(self) -> str:
+        text, self._buffer = self._buffer, ""
+        return redact_sensitive_text(text)
+
+
 def _redact(value: Any) -> GuardrailResult:
     if not isinstance(value, str):
         return GuardrailResult.allow()

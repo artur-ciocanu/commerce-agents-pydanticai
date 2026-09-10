@@ -18,6 +18,7 @@ from .memory import SessionMemory
 from .merchant import ChangeNotApplicable, MerchantExecutor
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
+from .travel import TravelBackend
 
 
 class ChatRequest(BaseModel):
@@ -35,7 +36,9 @@ class Session:
 
 class RetailHost:
     def __init__(self, model: str) -> None:
-        self._agents = {role: build_retail_agent(role, model) for role in ("shopping", "merchant")}
+        self._agents = {
+            role: build_retail_agent(role, model) for role in ("shopping", "merchant", "travel")
+        }
         self._sessions: dict[tuple[Role, str], Session] = {}
 
     def start(self, role: Role) -> str:
@@ -43,6 +46,8 @@ class RetailHost:
         session = Session()
         if role == "shopping":
             session.shopping_executor = ShoppingExecutor(session.executor, session_id)
+        elif role == "travel":
+            session.shopping_executor = ShoppingExecutor(TravelBackend(), session_id)
         else:
             from .retail import CATALOG
 
@@ -54,12 +59,40 @@ class RetailHost:
         session = self._sessions.get((role, session_id))
         if session is None:
             raise KeyError(session_id)
-        executor = session.shopping_executor if role == "shopping" else session.merchant_executor
+        executor = (
+            session.shopping_executor
+            if role in {"shopping", "travel"}
+            else session.merchant_executor
+        )
         assert executor is not None
         _, session.history, events = await self._agents[role].run(
             message, executor=executor, message_history=session.history, memory=session.memory
         )
         return events
+
+    def session(self, role: Role, session_id: str) -> Session:
+        session = self._sessions.get((role, session_id))
+        if session is None:
+            raise KeyError(session_id)
+        return session
+
+    async def stream_turn(
+        self, role: Role, session_id: str, message: str
+    ) -> AsyncIterator[AgentEvent]:
+        session = self.session(role, session_id)
+        executor = (
+            session.shopping_executor
+            if role in {"shopping", "travel"}
+            else session.merchant_executor
+        )
+        assert executor is not None
+        async for event in self._agents[role].stream_turn(
+            message,
+            executor=executor,
+            message_history=session.history,
+            memory=session.memory,
+        ):
+            yield event
 
     def approve_change(self, session_id: str, change_id: str) -> dict:
         session = self._sessions.get(("merchant", session_id))
@@ -68,9 +101,9 @@ class RetailHost:
         return session.merchant_executor.approve(change_id).model_dump(mode="json")
 
 
-def _sse(events: list[AgentEvent]) -> AsyncIterator[str]:
+def _sse(events: AsyncIterator[AgentEvent]) -> AsyncIterator[str]:
     async def frames() -> AsyncIterator[str]:
-        for event in events:
+        async for event in events:
             yield f"event: {event.type}\ndata: {json.dumps(event.data)}\n\n"
 
     return frames()
@@ -93,12 +126,16 @@ def create_app(model: str | None = None) -> FastAPI:
             if not x_session_id:
                 raise HTTPException(status_code=401, detail="X-Session-Id is required")
             try:
-                events = await host.turn(role, x_session_id, request.message)
+                host.session(role, x_session_id)
             except KeyError as error:
                 raise HTTPException(status_code=404, detail="Unknown session") from error
-            return StreamingResponse(_sse(events), media_type="text/event-stream")
+            return StreamingResponse(
+                _sse(host.stream_turn(role, x_session_id, request.message)),
+                media_type="text/event-stream",
+            )
 
     routes("shopping", "/api")
+    routes("travel", "/api/travel")
     routes("merchant", "/api/merchant")
 
     @app.post("/api/merchant/changes/{change_id}/approve")

@@ -43,5 +43,8 @@ Merchant price changes are staged by the agent and guarded to a 20% movement. A 
 the staged `change_id` through `POST /api/merchant/changes/{change_id}/approve` before an
 `apply_change` tool call can apply it; each approval is consumed after one use.
 
-For a terminal conversation, run `python -m commerce_agents.console shopping` or
-`python -m commerce_agents.console merchant`.
+Travel sessions use `POST /api/travel/session` and `POST /api/travel/chat`. They use the same
+provenance-gated cart flow, with travel-specific catalog data, booking terms, and policies.
+
+For a terminal conversation, run `python -m commerce_agents.console shopping`,
+`python -m commerce_agents.console travel`, or `python -m commerce_agents.console merchant`.

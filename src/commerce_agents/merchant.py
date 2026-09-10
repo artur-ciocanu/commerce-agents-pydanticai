@@ -154,6 +154,11 @@ def merchant_tools() -> tuple[ToolContract, ...]:
             _schema({"product_id": {"type": "string"}}, ["product_id"]),
         ),
         ToolContract(
+            "run_analysis",
+            "Ask a read-only specialist to analyze the current business snapshot.",
+            _schema({"question": {"type": "string", "maxLength": 300}}, ["question"]),
+        ),
+        ToolContract(
             "stage_price_update",
             "Stage a bounded price change for host approval.",
             _schema(

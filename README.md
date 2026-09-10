@@ -9,6 +9,8 @@ application-owned executor. The model never receives direct backend access.
 
 Every contract is validated again at execution time. Invalid model arguments trigger a PydanticAI
 retry rather than reaching the backend; bounded request and tool-call budgets prevent runaway turns.
+The shopping path additionally fences all backend data, loads skills from application-owned
+`SKILL.md` files, and requires catalog provenance before it permits cart writes.
 
 ## Status
 

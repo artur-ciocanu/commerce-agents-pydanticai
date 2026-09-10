@@ -15,6 +15,7 @@ from pydantic_ai.messages import ModelMessage
 
 from .events import AgentEvent
 from .retail import RetailExecutor, Role, build_retail_agent
+from .shopping import ShoppingExecutor
 
 
 class ChatRequest(BaseModel):
@@ -24,6 +25,7 @@ class ChatRequest(BaseModel):
 @dataclass
 class Session:
     executor: RetailExecutor = field(default_factory=RetailExecutor)
+    shopping_executor: ShoppingExecutor | None = None
     history: list[ModelMessage] = field(default_factory=list)
 
 
@@ -34,15 +36,20 @@ class RetailHost:
 
     def start(self, role: Role) -> str:
         session_id = uuid4().hex
-        self._sessions[(role, session_id)] = Session()
+        session = Session()
+        if role == "shopping":
+            session.shopping_executor = ShoppingExecutor(session.executor, session_id)
+        self._sessions[(role, session_id)] = session
         return session_id
 
     async def turn(self, role: Role, session_id: str, message: str) -> list[AgentEvent]:
         session = self._sessions.get((role, session_id))
         if session is None:
             raise KeyError(session_id)
+        executor = session.shopping_executor if role == "shopping" else session.executor
+        assert executor is not None
         _, session.history, events = await self._agents[role].run(
-            message, executor=session.executor, message_history=session.history
+            message, executor=executor, message_history=session.history
         )
         return events
 

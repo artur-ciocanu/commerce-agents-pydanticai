@@ -18,6 +18,8 @@ from pydantic_ai import Agent, ModelRetry, RunContext, Tool, UsageLimits
 from pydantic_ai.messages import ModelMessage
 
 from .events import AgentEvent, ToolOutcome
+from .guardrails import commerce_guardrails
+from .memory import SessionMemory
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,7 @@ class ToolContract:
 @dataclass
 class CommerceDependencies:
     executor: ToolExecutor
+    memory: SessionMemory | None = None
     host_events: list[AgentEvent] = field(default_factory=list)
 
 
@@ -58,7 +61,14 @@ def _tool(contract: ToolContract) -> Tool[CommerceDependencies]:
         payload = dict(arguments)
         ctx.deps.host_events.append(AgentEvent.tool_call(contract.name, call_id, payload))
         try:
-            outcome = await ctx.deps.executor.execute(contract.name, payload)
+            if contract.name == "save_memory":
+                if ctx.deps.memory is None:
+                    outcome = ToolOutcome("Memory is not enabled for this session.", is_error=True)
+                else:
+                    saved_key = ctx.deps.memory.save(str(payload["key"]), str(payload["value"]))
+                    outcome = ToolOutcome(f"Saved memory: {saved_key}.")
+            else:
+                outcome = await ctx.deps.executor.execute(contract.name, payload)
         except Exception:  # noqa: BLE001 - backend failures are converted into tool outcomes.
             # A backend failure is model-visible but never aborts a persisted conversation.
             outcome = ToolOutcome(
@@ -95,6 +105,7 @@ class CommerceAgent:
             deps_type=CommerceDependencies,
             instructions=instructions,
             tools=[_tool(contract) for contract in tools],
+            capabilities=commerce_guardrails(),
         )
         self._limits = UsageLimits(
             request_limit=max_requests,
@@ -107,8 +118,11 @@ class CommerceAgent:
         *,
         executor: ToolExecutor,
         message_history: list[ModelMessage] | None = None,
+        memory: SessionMemory | None = None,
     ) -> tuple[str, list[ModelMessage], list[AgentEvent]]:
-        deps = CommerceDependencies(executor)
+        deps = CommerceDependencies(executor, memory)
+        if memory is not None:
+            prompt = f"{prompt}\n\nSaved customer context:\n{memory.context()}"
         try:
             result = await self._agent.run(
                 prompt,
@@ -143,13 +157,16 @@ class CommerceAgent:
         *,
         executor: ToolExecutor,
         message_history: list[ModelMessage] | None = None,
+        memory: SessionMemory | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Yield the stable host protocol while retaining PydanticAI message history.
 
         PydanticAI executes tools before producing final text; tool events are therefore emitted
         before the final text event. Hosts persist the returned history through ``run``.
         """
-        text, _, events = await self.run(prompt, executor=executor, message_history=message_history)
+        text, _, events = await self.run(
+            prompt, executor=executor, message_history=message_history, memory=memory
+        )
         for event in events:
             if event.type != "turn_complete":
                 yield event

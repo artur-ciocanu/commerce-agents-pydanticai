@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .merchant import merchant_tools
-from .runtime import CommerceAgent
+from .runtime import CommerceAgent, ToolContract
 from .shopping import (
     Cart,
     CartItem,
@@ -18,6 +18,20 @@ from .shopping import (
 )
 
 Role = Literal["shopping", "merchant"]
+
+MEMORY_TOOL = ToolContract(
+    "save_memory",
+    "Save a durable, non-sensitive customer preference or constraint for this session.",
+    {
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "maxLength": 64},
+            "value": {"type": "string", "maxLength": 240},
+        },
+        "required": ["key", "value"],
+        "additionalProperties": False,
+    },
+)
 
 
 CATALOG = (
@@ -146,7 +160,7 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
                 "You are a concise retail shopping assistant. Use tools for catalog facts and "
                 "availability. Never invent a product, price, or cart result."
             ),
-            tools=shopping_tools(),
+            tools=(*shopping_tools(), MEMORY_TOOL),
         )
     return CommerceAgent(
         model=model,
@@ -154,5 +168,5 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
             "You are a retail merchant assistant. Use tools for operational facts. Every write "
             "must be staged for a human host; never claim a staged change is applied."
         ),
-        tools=merchant_tools(),
+        tools=(*merchant_tools(), MEMORY_TOOL),
     )

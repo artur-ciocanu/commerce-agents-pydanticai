@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai.messages import ModelMessage
 
 from .events import AgentEvent
+from .memory import SessionMemory
 from .merchant import ChangeNotApplicable, MerchantExecutor
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
@@ -29,6 +30,7 @@ class Session:
     shopping_executor: ShoppingExecutor | None = None
     merchant_executor: MerchantExecutor | None = None
     history: list[ModelMessage] = field(default_factory=list)
+    memory: SessionMemory = field(default_factory=SessionMemory)
 
 
 class RetailHost:
@@ -55,7 +57,7 @@ class RetailHost:
         executor = session.shopping_executor if role == "shopping" else session.merchant_executor
         assert executor is not None
         _, session.history, events = await self._agents[role].run(
-            message, executor=executor, message_history=session.history
+            message, executor=executor, message_history=session.history, memory=session.memory
         )
         return events
 

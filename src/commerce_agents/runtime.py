@@ -20,6 +20,7 @@ from pydantic_ai import Agent, ModelRetry, RunContext, Tool, UsageLimits
 from pydantic_ai.messages import ModelMessage, PartDeltaEvent, TextPartDelta
 
 from .events import AgentEvent, ToolOutcome
+from .grounding import shopping_grounding_tools
 from .guardrails import StreamingRedactor, commerce_guardrails
 from .memory import SessionMemory
 
@@ -144,6 +145,7 @@ class CommerceAgent:
         memory: SessionMemory | None = None,
     ) -> tuple[str, list[ModelMessage], list[AgentEvent]]:
         deps = CommerceDependencies(executor, memory, self._analysis)
+        prompt = await self._ground_prompt(prompt, executor, deps)
         if memory is not None:
             prompt = f"{prompt}\n\nSaved customer context:\n{memory.context()}"
         try:
@@ -185,6 +187,7 @@ class CommerceAgent:
         """Relay tool events and sanitized model text while the full agent graph executes."""
         events: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
         deps = CommerceDependencies(executor, memory, self._analysis, event_sink=events.put_nowait)
+        prompt = await self._ground_prompt(prompt, executor, deps)
         if memory is not None:
             prompt = f"{prompt}\n\nSaved customer context:\n{memory.context()}"
         redactor = StreamingRedactor()
@@ -268,3 +271,24 @@ class CommerceAgent:
                 task.cancel()
                 with suppress(asyncio.CancelledError):
                     await task
+
+    @staticmethod
+    async def _ground_prompt(
+        prompt: str, executor: ToolExecutor, deps: CommerceDependencies
+    ) -> str:
+        state = getattr(executor, "state", None)
+        seen_products = getattr(state, "seen_products", None)
+        if not isinstance(seen_products, dict):
+            return prompt
+        grounded: list[str] = []
+        for name, arguments in shopping_grounding_tools(prompt, set(seen_products)):
+            call_id = f"ground_{uuid4().hex}"
+            deps.emit(AgentEvent.tool_call(name, call_id, arguments))
+            outcome = await executor.execute(name, arguments)
+            for event in outcome.events:
+                deps.emit(event)
+            deps.emit(AgentEvent.tool_result(name, call_id, outcome))
+            grounded.append(outcome.result_text)
+        if not grounded:
+            return prompt
+        return f"{prompt}\n\nHost-grounded reference data:\n" + "\n".join(grounded)

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai.messages import ModelMessage
 
 from .events import AgentEvent
+from .merchant import ChangeNotApplicable, MerchantExecutor
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
 
@@ -26,6 +27,7 @@ class ChatRequest(BaseModel):
 class Session:
     executor: RetailExecutor = field(default_factory=RetailExecutor)
     shopping_executor: ShoppingExecutor | None = None
+    merchant_executor: MerchantExecutor | None = None
     history: list[ModelMessage] = field(default_factory=list)
 
 
@@ -39,6 +41,10 @@ class RetailHost:
         session = Session()
         if role == "shopping":
             session.shopping_executor = ShoppingExecutor(session.executor, session_id)
+        else:
+            from .retail import CATALOG
+
+            session.merchant_executor = MerchantExecutor(list(CATALOG))
         self._sessions[(role, session_id)] = session
         return session_id
 
@@ -46,12 +52,18 @@ class RetailHost:
         session = self._sessions.get((role, session_id))
         if session is None:
             raise KeyError(session_id)
-        executor = session.shopping_executor if role == "shopping" else session.executor
+        executor = session.shopping_executor if role == "shopping" else session.merchant_executor
         assert executor is not None
         _, session.history, events = await self._agents[role].run(
             message, executor=executor, message_history=session.history
         )
         return events
+
+    def approve_change(self, session_id: str, change_id: str) -> dict:
+        session = self._sessions.get(("merchant", session_id))
+        if session is None or session.merchant_executor is None:
+            raise KeyError(session_id)
+        return session.merchant_executor.approve(change_id).model_dump(mode="json")
 
 
 def _sse(events: list[AgentEvent]) -> AsyncIterator[str]:
@@ -86,6 +98,20 @@ def create_app(model: str | None = None) -> FastAPI:
 
     routes("shopping", "/api")
     routes("merchant", "/api/merchant")
+
+    @app.post("/api/merchant/changes/{change_id}/approve")
+    async def approve_change(
+        change_id: str, x_session_id: str | None = Header(default=None)
+    ) -> dict:
+        if not x_session_id:
+            raise HTTPException(status_code=401, detail="X-Session-Id is required")
+        try:
+            return {"change": host.approve_change(x_session_id, change_id)}
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail="Unknown session") from error
+        except ChangeNotApplicable as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
     return app
 
 

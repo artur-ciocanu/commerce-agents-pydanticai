@@ -39,5 +39,9 @@ Start a shopping session at `POST /api/session` and send `POST /api/chat` with i
 `/api/merchant/chat`. Both streams use `text_delta`, `tool_call`, `tool_result`,
 `cart_update`, `change_update`, and `turn_complete` SSE events.
 
+Merchant price changes are staged by the agent and guarded to a 20% movement. A host must approve
+the staged `change_id` through `POST /api/merchant/changes/{change_id}/approve` before an
+`apply_change` tool call can apply it; each approval is consumed after one use.
+
 For a terminal conversation, run `python -m commerce_agents.console shopping` or
 `python -m commerce_agents.console merchant`.

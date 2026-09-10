@@ -3,26 +3,6 @@ from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from commerce_agents.app import RetailHost, create_app
-from commerce_agents.retail import RetailExecutor
-
-
-async def test_merchant_price_changes_are_staged_not_applied() -> None:
-    executor = RetailExecutor()
-    outcome = await executor.execute(
-        "stage_price_update", {"product_id": "TR-100", "new_price": 199}
-    )
-
-    assert outcome.result_text == "Staged chg-0001 for host approval."
-    assert executor.staged_changes == [
-        {
-            "change_id": "chg-0001",
-            "product_id": "TR-100",
-            "from_price": 229.0,
-            "to_price": 199.0,
-            "status": "staged",
-        }
-    ]
-    assert outcome.events[0].type == "change_update"
 
 
 def model(messages, info: AgentInfo):

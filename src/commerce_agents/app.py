@@ -31,7 +31,7 @@ from .reference.merchant_travel import MockTravelMerchant
 from .reference.retail import MockRetail
 from .reference.telecom import MockTelecom
 from .reference.travel import MockTravel
-from .retail import RetailExecutor, Role, build_retail_agent
+from .retail import SHOPPING_SKILLS, RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
 from .source_merchant import SourceMerchantExecutor
 
@@ -72,19 +72,19 @@ class RetailHost:
         session = Session()
         if role == "shopping":
             session.shopping_executor = ShoppingExecutor(
-                RetailBackendAdapter(session_id), session_id
+                RetailBackendAdapter(session_id), session_id, skills=SHOPPING_SKILLS
             )
         elif role == "travel":
             session.shopping_executor = ShoppingExecutor(
-                TravelBackendAdapter(session_id), session_id
+                TravelBackendAdapter(session_id), session_id, skills=SHOPPING_SKILLS
             )
         elif role == "telecom":
             session.shopping_executor = ShoppingExecutor(
-                TelecomBackendAdapter(session_id), session_id
+                TelecomBackendAdapter(session_id), session_id, skills=SHOPPING_SKILLS
             )
         elif role == "entertainment":
             session.shopping_executor = ShoppingExecutor(
-                EntertainmentBackendAdapter(session_id), session_id
+                EntertainmentBackendAdapter(session_id), session_id, skills=SHOPPING_SKILLS
             )
         elif role == "merchant":
             from .retail import CATALOG

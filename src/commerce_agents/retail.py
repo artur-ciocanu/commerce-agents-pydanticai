@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 from .analysis import MerchantAnalysis
@@ -17,6 +18,11 @@ from .shopping import (
     ProductDetails,
     shopping_tools,
 )
+from .skills import SkillRegistry
+
+_SKILLS_ROOT = Path(__file__).parent / "reference" / "skills"
+SHOPPING_SKILLS = SkillRegistry.from_dir(_SKILLS_ROOT / "shopping")
+MERCHANT_SKILLS = SkillRegistry.from_dir(_SKILLS_ROOT / "merchant")
 
 Role = Literal[
     "shopping",
@@ -171,7 +177,7 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
                 "You are a concise retail shopping assistant. Use tools for catalog facts and "
                 "availability. Never invent a product, price, or cart result."
             ),
-            tools=(*shopping_tools(), MEMORY_TOOL),
+            tools=(*shopping_tools(SHOPPING_SKILLS), MEMORY_TOOL),
         )
     if role == "travel":
         return CommerceAgent(
@@ -181,7 +187,7 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
                 "Never invent availability, dates, cancellation terms, or bookings. Explain that "
                 "prices and availability are confirmed at booking."
             ),
-            tools=(*shopping_tools(), MEMORY_TOOL),
+            tools=(*shopping_tools(SHOPPING_SKILLS), MEMORY_TOOL),
         )
     if role == "telecom":
         return CommerceAgent(
@@ -190,7 +196,7 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
                 "You are a concise telecom assistant. Use tools for plans, devices, prices, and "
                 "policies. Never invent eligibility, contract terms, trade-in values, or disclosures."
             ),
-            tools=(*shopping_tools(), MEMORY_TOOL),
+            tools=(*shopping_tools(SHOPPING_SKILLS), MEMORY_TOOL),
         )
     if role == "entertainment":
         return CommerceAgent(
@@ -199,7 +205,7 @@ def build_retail_agent(role: Role, model: str) -> CommerceAgent:
                 "You are a concise ticketing assistant. Use tools for live event availability, prices, "
                 "fees, holds, and policies. Never invent seats, ticket availability, or hold status."
             ),
-            tools=(*shopping_tools(), MEMORY_TOOL),
+            tools=(*shopping_tools(SHOPPING_SKILLS), MEMORY_TOOL),
         )
     merchant_role = {
         "merchant": "retail",

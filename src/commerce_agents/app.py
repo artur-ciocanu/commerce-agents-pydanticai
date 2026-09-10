@@ -6,6 +6,7 @@ import json
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException
@@ -23,11 +24,16 @@ from .reference.adapter import (
     TravelBackendAdapter,
 )
 from .reference.entertainment import MockTicketing
+from .reference.merchant_entertainment import MockTicketingMerchant
+from .reference.merchant_retail import MockRetailMerchant
+from .reference.merchant_telecom import MockTelecomMerchant
+from .reference.merchant_travel import MockTravelMerchant
 from .reference.retail import MockRetail
 from .reference.telecom import MockTelecom
 from .reference.travel import MockTravel
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
+from .source_merchant import SourceMerchantExecutor
 
 
 class ChatRequest(BaseModel):
@@ -38,7 +44,7 @@ class ChatRequest(BaseModel):
 class Session:
     executor: RetailExecutor = field(default_factory=RetailExecutor)
     shopping_executor: ShoppingExecutor | None = None
-    merchant_executor: MerchantExecutor | None = None
+    merchant_executor: Any | None = None
     history: list[ModelMessage] = field(default_factory=list)
     memory: SessionMemory = field(default_factory=SessionMemory)
 
@@ -85,13 +91,21 @@ class RetailHost:
 
             session.merchant_executor = MerchantExecutor(list(CATALOG))
         elif role == "retail_merchant":
-            session.merchant_executor = MerchantExecutor(backend=MockRetail())
+            session.merchant_executor = SourceMerchantExecutor(
+                MockRetailMerchant(MockRetail()), session_id
+            )
         elif role == "travel_merchant":
-            session.merchant_executor = MerchantExecutor(backend=MockTravel())
+            session.merchant_executor = SourceMerchantExecutor(
+                MockTravelMerchant(MockTravel()), session_id
+            )
         elif role == "telecom_merchant":
-            session.merchant_executor = MerchantExecutor(backend=MockTelecom())
+            session.merchant_executor = SourceMerchantExecutor(
+                MockTelecomMerchant(MockTelecom()), session_id
+            )
         else:
-            session.merchant_executor = MerchantExecutor(backend=MockTicketing())
+            session.merchant_executor = SourceMerchantExecutor(
+                MockTicketingMerchant(MockTicketing()), session_id
+            )
         self._sessions[(role, session_id)] = session
         return session_id
 

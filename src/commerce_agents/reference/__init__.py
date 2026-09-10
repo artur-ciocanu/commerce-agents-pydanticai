@@ -1,6 +1,6 @@
 """Transplanted commerce-agents domain contracts, independent of model runtimes."""
 
-from .adapter import RetailBackendAdapter
+from .adapter import RetailBackendAdapter, TravelBackendAdapter
 from .shopping import (
     Cart,
     CartItem,
@@ -30,6 +30,7 @@ __all__ = [
     "RetailBackendAdapter",
     "SearchFilters",
     "ShoppingSessionContext",
+    "TravelBackendAdapter",
     "Unavailable",
     "UserPreferences",
 ]

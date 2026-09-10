@@ -7,12 +7,13 @@ from typing import Any
 from ..shopping import Cart, CartItem, FulfillmentOption, Policy, Product, ProductDetails
 from .retail import MockRetail
 from .shopping import SearchFilters, ShoppingSessionContext
+from .travel import MockTravel
 
 
 class RetailBackendAdapter:
     """The source MockRetail API behind the target's provider-neutral tool executor."""
 
-    def __init__(self, session_id: str, backend: MockRetail | None = None) -> None:
+    def __init__(self, session_id: str, backend: Any | None = None) -> None:
         self._backend = backend or MockRetail()
         self._session = ShoppingSessionContext(session_id=session_id)
 
@@ -57,3 +58,10 @@ class RetailBackendAdapter:
             items=[CartItem.model_validate(item.model_dump()) for item in source.items],
             currency=source.currency,
         )
+
+
+class TravelBackendAdapter(RetailBackendAdapter):
+    """The source MockTravel API behind the target's provider-neutral tool executor."""
+
+    def __init__(self, session_id: str, backend: MockTravel | None = None) -> None:
+        super().__init__(session_id, backend or MockTravel())

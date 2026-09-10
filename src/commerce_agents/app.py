@@ -16,10 +16,9 @@ from pydantic_ai.messages import ModelMessage
 from .events import AgentEvent
 from .memory import SessionMemory
 from .merchant import ChangeNotApplicable, MerchantExecutor
-from .reference.adapter import RetailBackendAdapter
+from .reference.adapter import RetailBackendAdapter, TravelBackendAdapter
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
-from .travel import TravelBackend
 
 
 class ChatRequest(BaseModel):
@@ -50,7 +49,9 @@ class RetailHost:
                 RetailBackendAdapter(session_id), session_id
             )
         elif role == "travel":
-            session.shopping_executor = ShoppingExecutor(TravelBackend(), session_id)
+            session.shopping_executor = ShoppingExecutor(
+                TravelBackendAdapter(session_id), session_id
+            )
         else:
             from .retail import CATALOG
 

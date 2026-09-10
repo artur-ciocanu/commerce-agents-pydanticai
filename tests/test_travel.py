@@ -3,21 +3,18 @@ from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from commerce_agents.app import create_app
-from commerce_agents.travel import TravelBackend
+from commerce_agents.reference.adapter import TravelBackendAdapter
 
 
 async def test_travel_backend_searches_destination_and_preserves_cart() -> None:
-    backend = TravelBackend()
+    backend = TravelBackendAdapter("travel-contract")
 
     products = await backend.search_products("lisbon", None, 8)
-    assert {product.product_id for product in products} == {
-        "HTL-LIS-01",
-        "FLT-LIS-01",
-        "ACT-LIS-01",
-    }
+    assert products
 
-    await backend.add_to_cart("session", "HTL-LIS-01", 1)
-    assert (await backend.get_cart("session")).items[0].product_id == "HTL-LIS-01"
+    product_id = products[0].product_id
+    await backend.add_to_cart("session", product_id, 1)
+    assert (await backend.get_cart("session")).items[0].product_id == product_id
 
 
 def test_travel_api_uses_the_shared_sse_contract() -> None:

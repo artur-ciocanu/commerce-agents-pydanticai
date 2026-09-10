@@ -10,6 +10,8 @@ EventType = Literal[
     "tool_call",
     "tool_result",
     "ui",
+    "ui_partial",
+    "progress",
     "cart_update",
     "change_update",
     "turn_complete",
@@ -51,6 +53,14 @@ class AgentEvent:
     @classmethod
     def error(cls, message: str) -> AgentEvent:
         return cls("error", {"message": message})
+
+    @classmethod
+    def ui_partial(cls, component: str, payload: dict[str, Any]) -> AgentEvent:
+        return cls("ui_partial", {"component": component, "payload": payload})
+
+    @classmethod
+    def progress(cls, message: str) -> AgentEvent:
+        return cls("progress", {"message": message[:140]})
 
 
 @dataclass(frozen=True)

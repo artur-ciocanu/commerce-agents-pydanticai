@@ -16,6 +16,7 @@ from pydantic_ai.messages import ModelMessage
 from .events import AgentEvent
 from .memory import SessionMemory
 from .merchant import ChangeNotApplicable, MerchantExecutor
+from .reference.adapter import RetailBackendAdapter
 from .retail import RetailExecutor, Role, build_retail_agent
 from .shopping import ShoppingExecutor
 from .travel import TravelBackend
@@ -45,7 +46,9 @@ class RetailHost:
         session_id = uuid4().hex
         session = Session()
         if role == "shopping":
-            session.shopping_executor = ShoppingExecutor(session.executor, session_id)
+            session.shopping_executor = ShoppingExecutor(
+                RetailBackendAdapter(session_id), session_id
+            )
         elif role == "travel":
             session.shopping_executor = ShoppingExecutor(TravelBackend(), session_id)
         else:

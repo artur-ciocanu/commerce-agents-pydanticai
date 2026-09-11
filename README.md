@@ -1,86 +1,104 @@
 # Commerce Agents for PydanticAI
 
-This is a standalone, provider-agnostic PydanticAI migration of
-[Anthropic's commerce-agents](https://github.com/anthropics/commerce-agents). It ports the
-source domain contracts, fixtures, storefront and merchant backends, skills, guardrails, and
-HTTP interfaces while replacing the Anthropic/Claude runtime orchestration with PydanticAI.
+A standalone, provider-agnostic PydanticAI migration of
+[Anthropic's commerce-agents](https://github.com/anthropics/commerce-agents).
+It includes migrated domain contracts, fixtures, storefronts, merchant portals,
+skills, and HTTP interfaces for retail, travel, telecom, and entertainment.
+It replaces the Claude runtime orchestration; it does not require the source
+checkout at runtime.
 
-Migrated verticals: retail, travel, telecom, and entertainment. Source-backed merchant
-runtimes and vendored `SKILL.md` files are included in this repository; it does not depend on
-the original checkout at runtime.
-
-## Install and Run
+## Quick Start
 
 ```bash
-python -m pip install -e '.[dev]'
-export COMMERCE_MODEL='openai:gpt-5.2'
-python -m commerce_agents
+python -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+export COMMERCE_MODEL='openai:gpt-5.6-luna'
+export OPENAI_API_KEY='...'
+.venv/bin/python -m commerce_agents
 ```
 
-`COMMERCE_MODEL` accepts normal PydanticAI model strings, for example:
+`COMMERCE_MODEL` is a PydanticAI model string. Configure the matching provider
+credential before starting the application.
 
-```bash
-export COMMERCE_MODEL='openai:gpt-5.2'
-export COMMERCE_MODEL='anthropic:claude-sonnet-4-5'
-export COMMERCE_MODEL='google-gla:gemini-3-flash-preview'
-```
+| Model example | Required environment variable |
+| --- | --- |
+| `openai:gpt-5.6-luna` | `OPENAI_API_KEY` |
+| `anthropic:claude-sonnet-4-5` | `ANTHROPIC_API_KEY` |
+| `google-gla:gemini-3-flash-preview` | `GEMINI_API_KEY` |
 
-Configure credentials for the selected provider, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
-or `GEMINI_API_KEY`.
+The default model is `openai:gpt-5.2` when `COMMERCE_MODEL` is unset.
 
-## HTTP APIs
+## Routes
 
-`create_app()` runs the retail storefront at `/api` and retains the legacy simplified merchant
-runtime at `/api/merchant`. It also exposes namespaced vertical routes:
+`create_app()` uses retail at the root storefront prefix and keeps the original
+simplified merchant agent at the root merchant prefix. It also mounts every
+vertical under a namespace:
 
-| Vertical | Storefront | Source-backed merchant |
+| Vertical | Storefront | Source-backed merchant portal |
 | --- | --- | --- |
 | Retail | `/api` | `/api/retail/merchant` |
 | Travel | `/api/travel` | `/api/travel/merchant` |
 | Telecom | `/api/telecom` | `/api/telecom/merchant` |
 | Entertainment | `/api/entertainment` | `/api/entertainment/merchant` |
 
-For source-compatible single-vertical deployments, call `create_app(vertical="retail")`,
+In the default app, `/api/merchant` is the simplified merchant runtime. For a
+source-compatible root alias, use `create_app(vertical="retail")`,
 `create_app(vertical="travel")`, `create_app(vertical="telecom")`, or
-`create_app(vertical="entertainment")`. In those apps, the selected storefront and its
-source-backed merchant runtime are mounted at `/api` and `/api/merchant` respectively.
+`create_app(vertical="entertainment")`. The selected storefront and its
+source-backed merchant portal are then available at `/api` and `/api/merchant`.
+The namespaced routes remain mounted.
 
-All storefronts provide `POST /session`, `POST /chat`, `GET /products`,
-`GET /products/{product_id}`, `GET /cart`, `GET /orders`, `GET/PATCH/DELETE /memory`,
-`POST /reset`, and `GET /health` below their prefix. Retail adds
-`POST /cart/add` and detail-panel price/review enrichment. Telecom adds `POST /cart/add` for
-devices and add-ons only, plus `GET /account`. Entertainment adds `POST /cart/add`,
+All storefront prefixes expose `POST /session`, `POST /chat`, `GET /products`,
+`GET /products/{product_id}`, `GET /cart`, `GET /orders`, and
+`GET/PATCH/DELETE /memory`, plus `POST /reset` and `GET /health`. Retail,
+telecom, and entertainment also expose `POST /cart/add`; telecom adds
+`GET /account`. Entertainment adds
 `GET /holds`, `POST /holds/release`, `POST /waitlist/join`, `GET /waitlist`,
 `POST /waitlist/claim`, `POST /demo/return`, `GET /tickets`,
 `POST /tickets/transfer`, and `POST /tickets/transfer/cancel`.
 
-Sessions are created with `POST .../session` and supplied through `X-Session-Id`. Catalog reads
-are public; cart, account, ticket, agent, and approval operations require the header.
-Retail product assets are served at `/products/{filename}`. Source-backed merchant portals provide
-`GET /overview`, `GET /listings[/{id}]`, `GET /alerts`, staged-change `apply`/`discard`, memory,
-reset, health, and their vertical read (`/occupancy`, `/base`, or `/pacing`).
+Merchant portals expose `POST /session`, `POST /chat`, `GET /overview`,
+`GET /listings`, `GET /listings/{id}`, `GET /alerts`, staged-change
+`POST /changes/{id}/approve`, `POST /changes/{id}/apply`, and
+`POST /changes/{id}/discard`, plus memory, reset, and health endpoints. Travel,
+telecom, and entertainment also expose `/occupancy`, `/base`, and `/pacing`,
+respectively.
 
-## Runtime Safety
+Create a session with `POST .../session` and send its ID as `X-Session-Id` for
+session-scoped operations. Catalog reads and health checks are public; cart,
+account, ticket, agent, memory, approval, and merchant portal operations use
+the header. Retail product images are static assets at `/products/{filename}`.
 
-The model receives JSON Schema tool contracts, not direct backend access. The application owns
-tool execution, schema validation, bounded request/tool budgets, catalog provenance and variant
-gates, output fencing, guardrails, filtered session memory, and host approvals.
+`POST .../chat` returns `text/event-stream` SSE events: `text_delta`,
+`tool_call`, `tool_result`, `cart_update`, `change_update`, presentation `ui`,
+`error`, and `turn_complete`.
 
-`POST .../chat` streams server-sent events using `text_delta`, `tool_call`, `tool_result`,
-`cart_update`, `change_update`, presentation `ui`, `error`, and `turn_complete` events.
-Merchant changes remain staged until the host calls
-`POST .../merchant/changes/{change_id}/approve`; approval is consumed when the matching change
-is applied.
+Entertainment ticketing maps ownership errors to `403`, missing records to
+`404`, invalid state to `409`, and other ticketing errors to `400`.
 
-## Verification
+## Safety Boundaries
 
-The deterministic tests use `FunctionModel` and vendored fixtures. The live-provider smoke test
-is opt-in:
+The model receives JSON Schema tool contracts, not backend access. The
+application executes tools and validates inputs, applies request and tool-call
+limits, enforces catalog provenance and variant gates, fences model-facing
+content, runs input/tool-result/output guardrails, filters session memory, and
+requires host approval before staged merchant changes can be applied.
+
+## Tests
+
+The deterministic suite uses `FunctionModel` test doubles and vendored fixtures:
 
 ```bash
-mise exec -- uv run pytest -m live tests/test_live_provider_smoke.py
+.venv/bin/pytest
+```
+
+The live-provider smoke test is opt-in and requires a configured provider key:
+
+```bash
+COMMERCE_MODEL="openai:gpt-5.6-luna" .venv/bin/pytest -m live tests/test_live_provider_smoke.py
 ```
 
 ## Scope
 
-This migration explicitly excludes the Claude Agent SDK, MCP deployment, and Managed Agents.
+This migration does not include the Claude Agent SDK, MCP deployment, or
+Managed Agents.

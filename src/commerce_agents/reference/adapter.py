@@ -15,9 +15,11 @@ from .travel import MockTravel
 class RetailBackendAdapter:
     """The source MockRetail API behind the target's provider-neutral tool executor."""
 
-    def __init__(self, session_id: str, backend: Any | None = None) -> None:
+    def __init__(
+        self, session_id: str, backend: Any | None = None, user_id: str = "demo-user"
+    ) -> None:
         self._backend = backend or MockRetail()
-        self._session = ShoppingSessionContext(session_id=session_id)
+        self._session = ShoppingSessionContext(session_id=session_id, user_id=user_id)
 
     async def search_products(
         self, query: str, filters: dict[str, Any] | None, limit: int
@@ -85,19 +87,25 @@ class RetailBackendAdapter:
 class TravelBackendAdapter(RetailBackendAdapter):
     """The source MockTravel API behind the target's provider-neutral tool executor."""
 
-    def __init__(self, session_id: str, backend: MockTravel | None = None) -> None:
-        super().__init__(session_id, backend or MockTravel())
+    def __init__(
+        self, session_id: str, backend: MockTravel | None = None, user_id: str = "demo-user"
+    ) -> None:
+        super().__init__(session_id, backend or MockTravel(), user_id)
 
 
 class TelecomBackendAdapter(RetailBackendAdapter):
     """The source MockTelecom API behind the target's provider-neutral tool executor."""
 
-    def __init__(self, session_id: str, backend: MockTelecom | None = None) -> None:
-        super().__init__(session_id, backend or MockTelecom())
+    def __init__(
+        self, session_id: str, backend: MockTelecom | None = None, user_id: str = "demo-user"
+    ) -> None:
+        super().__init__(session_id, backend or MockTelecom(), user_id)
 
 
 class EntertainmentBackendAdapter(RetailBackendAdapter):
     """The source ticketing backend, including its live availability and hold state."""
 
-    def __init__(self, session_id: str, backend: MockTicketing | None = None) -> None:
-        super().__init__(session_id, backend or MockTicketing())
+    def __init__(
+        self, session_id: str, backend: MockTicketing | None = None, user_id: str = "demo-user"
+    ) -> None:
+        super().__init__(session_id, backend or MockTicketing(), user_id)

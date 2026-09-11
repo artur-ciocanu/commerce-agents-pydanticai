@@ -1,60 +1,82 @@
 # Commerce Agents for PydanticAI
 
-Provider-agnostic shopping and merchant agent runtime built on PydanticAI v2.
+This is a standalone, provider-agnostic PydanticAI migration of
+[Anthropic's commerce-agents](https://github.com/anthropics/commerce-agents). It ports the
+source domain contracts, fixtures, storefront and merchant backends, skills, guardrails, and
+HTTP interfaces while replacing the Anthropic/Claude runtime orchestration with PydanticAI.
 
-## Live Provider Smoke Test
+Migrated verticals: retail, travel, telecom, and entertainment. Source-backed merchant
+runtimes and vendored `SKILL.md` files are included in this repository; it does not depend on
+the original checkout at runtime.
 
-The deterministic suite does not require provider credentials. To exercise a configured
-provider's streaming, tool selection, session history, and SSE relay, set `COMMERCE_MODEL`
-and the matching provider credentials, then run:
+## Install and Run
+
+```bash
+python -m pip install -e '.[dev]'
+export COMMERCE_MODEL='openai:gpt-5.2'
+python -m commerce_agents
+```
+
+`COMMERCE_MODEL` accepts normal PydanticAI model strings, for example:
+
+```bash
+export COMMERCE_MODEL='openai:gpt-5.2'
+export COMMERCE_MODEL='anthropic:claude-sonnet-4-5'
+export COMMERCE_MODEL='google-gla:gemini-3-flash-preview'
+```
+
+Configure credentials for the selected provider, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+or `GEMINI_API_KEY`.
+
+## HTTP APIs
+
+`create_app()` runs the retail storefront at `/api` and retains the legacy simplified merchant
+runtime at `/api/merchant`. It also exposes namespaced vertical routes:
+
+| Vertical | Storefront | Source-backed merchant |
+| --- | --- | --- |
+| Retail | `/api` | `/api/retail/merchant` |
+| Travel | `/api/travel` | `/api/travel/merchant` |
+| Telecom | `/api/telecom` | `/api/telecom/merchant` |
+| Entertainment | `/api/entertainment` | `/api/entertainment/merchant` |
+
+For source-compatible single-vertical deployments, call `create_app(vertical="retail")`,
+`create_app(vertical="travel")`, `create_app(vertical="telecom")`, or
+`create_app(vertical="entertainment")`. In those apps, the selected storefront and its
+source-backed merchant runtime are mounted at `/api` and `/api/merchant` respectively.
+
+All storefronts provide `POST /session`, `POST /chat`, `GET /products`,
+`GET /products/{product_id}`, `GET /cart`, and `GET /orders` below their prefix. Retail adds
+`POST /cart/add` and detail-panel price/review enrichment. Telecom adds `POST /cart/add` for
+devices and add-ons only, plus `GET /account`. Entertainment adds `POST /cart/add`,
+`GET /holds`, `POST /holds/release`, `POST /waitlist/join`, `GET /waitlist`,
+`POST /waitlist/claim`, `POST /demo/return`, `GET /tickets`,
+`POST /tickets/transfer`, and `POST /tickets/transfer/cancel`.
+
+Sessions are created with `POST .../session` and supplied through `X-Session-Id`. Catalog reads
+are public; cart, account, ticket, agent, and approval operations require the header.
+
+## Runtime Safety
+
+The model receives JSON Schema tool contracts, not direct backend access. The application owns
+tool execution, schema validation, bounded request/tool budgets, catalog provenance and variant
+gates, output fencing, guardrails, filtered session memory, and host approvals.
+
+`POST .../chat` streams server-sent events using `text_delta`, `tool_call`, `tool_result`,
+`cart_update`, `change_update`, presentation `ui`, `error`, and `turn_complete` events.
+Merchant changes remain staged until the host calls
+`POST .../merchant/changes/{change_id}/approve`; approval is consumed when the matching change
+is applied.
+
+## Verification
+
+The deterministic tests use `FunctionModel` and vendored fixtures. The live-provider smoke test
+is opt-in:
 
 ```bash
 mise exec -- uv run pytest -m live tests/test_live_provider_smoke.py
 ```
 
-The runtime accepts a normal PydanticAI model specification, such as
-`openai:gpt-5.2`, `anthropic:claude-sonnet-4-5`, or `google-gla:gemini-3-flash-preview`.
-Commerce tool contracts remain JSON Schema documents and every tool call is delegated to the
-application-owned executor. The model never receives direct backend access.
+## Scope
 
-Every contract is validated again at execution time. Invalid model arguments trigger a PydanticAI
-retry rather than reaching the backend; bounded request and tool-call budgets prevent runaway turns.
-The shopping path additionally fences all backend data, loads skills from application-owned
-`SKILL.md` files, and requires catalog provenance before it permits cart writes.
-
-## Status
-
-This repository is the in-progress PydanticAI port of Anthropic's commerce-agents reference.
-The first milestone is the retail shopping and merchant API path. Managed Agents and Claude Code
-SDK-specific skills are intentionally not part of this runtime.
-
-## Install
-
-```bash
-python -m pip install -e '.[dev]'
-```
-
-Configure the selected provider with its normal environment variable, for example
-`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`.
-
-## Run Retail
-
-```bash
-export COMMERCE_MODEL='openai:gpt-5.2'
-python -m commerce_agents
-```
-
-Start a shopping session at `POST /api/session` and send `POST /api/chat` with its
-`X-Session-Id` header. Merchant sessions use `/api/merchant/session` and
-`/api/merchant/chat`. Both streams use `text_delta`, `tool_call`, `tool_result`,
-`cart_update`, `change_update`, and `turn_complete` SSE events.
-
-Merchant price changes are staged by the agent and guarded to a 20% movement. A host must approve
-the staged `change_id` through `POST /api/merchant/changes/{change_id}/approve` before an
-`apply_change` tool call can apply it; each approval is consumed after one use.
-
-Travel sessions use `POST /api/travel/session` and `POST /api/travel/chat`. They use the same
-provenance-gated cart flow, with travel-specific catalog data, booking terms, and policies.
-
-For a terminal conversation, run `python -m commerce_agents.console shopping`,
-`python -m commerce_agents.console travel`, or `python -m commerce_agents.console merchant`.
+This migration explicitly excludes the Claude Agent SDK, MCP deployment, and Managed Agents.

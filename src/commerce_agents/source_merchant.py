@@ -42,6 +42,34 @@ class SourceMerchantExecutor:
         self._state.approved_change_ids.add(change_id)
         return change
 
+    async def change_action(
+        self, change_id: str, action: str
+    ) -> tuple[bool, Any | None, str | None]:
+        """Run a portal preview-card action through the same approval gate as the agent."""
+        if action == "apply_change":
+            self._state.approved_change_ids.add(change_id)
+        try:
+            outcome = await self.execute(action, {"change_id": change_id})
+        finally:
+            self._state.approved_change_ids.discard(change_id)
+        if outcome.is_error:
+            raise ValueError(outcome.result_text)
+        if outcome.blocked:
+            return False, None, outcome.result_text
+        change = next(
+            (event.data.get("change") for event in outcome.events if event.type == "change_update"),
+            None,
+        )
+        return True, change, None
+
+    @property
+    def backend(self) -> Any:
+        return self._backend
+
+    @property
+    def session(self) -> MerchantSessionContext:
+        return self._session
+
     async def execute(self, name: str, arguments: dict[str, Any]) -> ToolOutcome:
         try:
             if name == "get_business_snapshot":

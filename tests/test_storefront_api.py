@@ -143,3 +143,105 @@ def test_entertainment_hold_waitlist_offer_and_transfer_contract(client: TestCli
             json={"transfer_id": transfer.json()["transfer"]["transfer_id"]},
             headers=headers,
         ).json() == {"ok": True, "status": "cancelled"}
+
+
+def test_storefront_memory_reset_and_health_contract(client: TestClient) -> None:
+    session_id, headers = session(client)
+    app = client.app
+    app.state.retail_host.session("shopping", session_id).memory.save("color", "blue")
+
+    assert client.get("/api/memory", headers=headers).json() == {
+        "facts": [{"key": "color", "value": "blue"}]
+    }
+    assert client.patch(
+        "/api/memory", json={"key": "color", "value": "green"}, headers=headers
+    ).json() == {"ok": True, "fact": {"key": "color", "value": "green"}}
+    assert client.request(
+        "DELETE", "/api/memory", json={"key": "color"}, headers=headers
+    ).json() == {
+        "ok": True,
+        "deleted": "color",
+    }
+    reset = client.post("/api/reset", json={"purge_memory": True}, headers=headers)
+    assert reset.status_code == 200 and reset.json()["session_id"] != session_id
+    health = client.get("/api/health").json()
+    assert health["ok"] and health["store"] == "ACME" and health["model"] == "test"
+    assert client.get("/products/AR-1002.webp").status_code == 200
+    assert client.get("/products/missing.webp").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("vertical", "read_path", "overview_key"),
+    [
+        ("retail", None, "trends"),
+        ("travel", "/occupancy", "today"),
+        ("telecom", "/base", "today"),
+        ("entertainment", "/pacing", "today"),
+    ],
+)
+def test_source_merchant_portal_contract(
+    vertical: str, read_path: str | None, overview_key: str
+) -> None:
+    app = create_app("test", vertical=vertical)
+    with TestClient(app) as portal:
+        started = portal.post("/api/merchant/session")
+        assert started.status_code == 200
+        headers = {"X-Session-Id": started.json()["session_id"]}
+        assert "merchant_id" in started.json() and "operator" in started.json()
+        overview = portal.get("/api/merchant/overview", headers=headers)
+        assert overview.status_code == 200 and overview_key in overview.json()
+        listings = portal.get("/api/merchant/listings", headers=headers).json()
+        assert listings["total"] and listings["listings"]
+        listing_id = listings["listings"][0]["listing_id"]
+        assert (
+            portal.get(f"/api/merchant/listings/{listing_id}", headers=headers).status_code == 200
+        )
+        assert portal.get("/api/merchant/alerts", headers=headers).status_code == 200
+        assert portal.get("/api/merchant/health").json()["role"] == "merchant"
+        if read_path:
+            assert portal.get(f"/api/merchant{read_path}", headers=headers).status_code == 200
+        assert (
+            portal.post("/api/merchant/changes/missing/discard", headers=headers).status_code == 400
+        )
+        assert portal.post("/api/merchant/reset", json={}, headers=headers).status_code == 200
+
+
+def test_ticket_errors_match_source_statuses() -> None:
+    app = create_app("test", vertical="entertainment")
+    with TestClient(app) as tickets_client:
+        first = tickets_client.post("/api/session", json={"user_id": "demo-user"}).json()
+        second = tickets_client.post("/api/session", json={"user_id": "other-user"}).json()
+        headers = {"X-Session-Id": first["session_id"]}
+        other_headers = {"X-Session-Id": second["session_id"]}
+        backend = app.state.retail_host._storefronts["entertainment"]
+        available_id = next(pid for pid in backend.products if backend.engine.remaining(pid) > 0)
+        assert (
+            tickets_client.post(
+                "/api/cart/add", json={"product_id": available_id}, headers=headers
+            ).status_code
+            == 200
+        )
+        hold_id = tickets_client.get("/api/holds", headers=headers).json()["holds"][0]["hold_id"]
+        assert (
+            tickets_client.post(
+                "/api/holds/release", json={"hold_id": hold_id}, headers=other_headers
+            ).status_code
+            == 403
+        )
+        assert (
+            tickets_client.post(
+                "/api/holds/release", json={"hold_id": "missing"}, headers=headers
+            ).status_code
+            == 404
+        )
+        executor = app.state.retail_host.session(
+            "entertainment", first["session_id"]
+        ).shopping_executor
+        assert executor is not None
+        executor.state.remember_products([backend.get_live_product(available_id)])
+        assert (
+            tickets_client.post(
+                "/api/waitlist/join", json={"product_id": available_id}, headers=headers
+            ).status_code
+            == 409
+        )

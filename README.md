@@ -46,7 +46,8 @@ For source-compatible single-vertical deployments, call `create_app(vertical="re
 source-backed merchant runtime are mounted at `/api` and `/api/merchant` respectively.
 
 All storefronts provide `POST /session`, `POST /chat`, `GET /products`,
-`GET /products/{product_id}`, `GET /cart`, and `GET /orders` below their prefix. Retail adds
+`GET /products/{product_id}`, `GET /cart`, `GET /orders`, `GET/PATCH/DELETE /memory`,
+`POST /reset`, and `GET /health` below their prefix. Retail adds
 `POST /cart/add` and detail-panel price/review enrichment. Telecom adds `POST /cart/add` for
 devices and add-ons only, plus `GET /account`. Entertainment adds `POST /cart/add`,
 `GET /holds`, `POST /holds/release`, `POST /waitlist/join`, `GET /waitlist`,
@@ -55,6 +56,9 @@ devices and add-ons only, plus `GET /account`. Entertainment adds `POST /cart/ad
 
 Sessions are created with `POST .../session` and supplied through `X-Session-Id`. Catalog reads
 are public; cart, account, ticket, agent, and approval operations require the header.
+Retail product assets are served at `/products/{filename}`. Source-backed merchant portals provide
+`GET /overview`, `GET /listings[/{id}]`, `GET /alerts`, staged-change `apply`/`discard`, memory,
+reset, health, and their vertical read (`/occupancy`, `/base`, or `/pacing`).
 
 ## Runtime Safety
 
